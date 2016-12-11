@@ -125,23 +125,6 @@ correlation_ratio_test <- function(my_table, points_from_range_, confidence_leve
 };
 
 
- women.metr <- women
- women.metr$height <- 0.0254*women.metr$height
- women.metr$weight <- 0.45359237*women.metr$weight
-
- lm.women<-lm(formula = weight ~ height, data = women.metr)
- 
- b0 <- lm.women$coefficient[1]
- b1 <- lm.women$coefficient[2]
- x1 <- min(women.metr$height)
- x2 <- max(women.metr$height)
- x <- seq(from = x1, to = x2, length.out =100)
- y <- b0 + b1*x
-
- plot(women.metr$height, women.metr$weight, main="", xlab="Рост (м)", ylab="Вес (кг)")
- grid()
- lines(x, y, col="red")
-
 shinyServer(function(input, output) {
   
   # By declaring get_my_table as a reactive expression we ensure 
@@ -166,7 +149,7 @@ shinyServer(function(input, output) {
   output$correlation_field <- renderPlot({
     my_table <- get_my_table();
     if (!is.null(my_table)) {
-      lm_ <- lm(y ~ x, data = my_table);
+      lm_ <- lm(my_table[[2]] ~ my_table[[1]]);
       
       pl_ <- plot(my_table);
       grid();
@@ -182,7 +165,7 @@ shinyServer(function(input, output) {
       return(pl_);
     }
     return(NULL);
-  })
+  });
   
   output$sample_size <- renderPrint({
     my_table <- get_my_table();
@@ -190,7 +173,7 @@ shinyServer(function(input, output) {
       return(cat(paste("sample size is", length(my_table[[1]]))));
     }
     return(NULL);
-  })
+  });
   
   #і проведення первинного статистичного аналізу окремих ознак об’єкта (точкове та інтервальне оцінювання середнього, середньоквадратичного, коефіцієнтів асиметрії та ексцесу).
   output$primary_statistical_analysis <- renderTable({
@@ -216,7 +199,7 @@ shinyServer(function(input, output) {
     );
     colnames(result) <- c("", colnames(my_table));
     return (result);
-  })
+  });
   
   #* 2.1.	знаходження оцінки коефіцієнта кореляції, перевірку його значущості та призначення довірчого інтервалу (у випадку значущості);
   #* 2.3.	підрахунок рангових коефіцієнтів кореляції Спірмена та Кендалла та перевірку їх значущості.
@@ -337,7 +320,7 @@ shinyServer(function(input, output) {
     return(cat(
       paste0("[min(", colnames(my_table)[1], "); max(", colnames(my_table)[1], ")]   =   [", min(my_table[[1]]), "; ", max(my_table[[1]]), "]")
     ));
-  })
+  });
   
   output$select_file_text <- renderPrint({
     my_table <- get_my_table();
@@ -346,5 +329,12 @@ shinyServer(function(input, output) {
     return(cat(
       paste0("Select file with vector of numbers from range [", min(my_table[[1]]), "; ", max(my_table[[1]]), "]")
     ));
-  })
+  });
+  
+  output$lin_regression <- renderTable({
+    lm_ <- lm(my_table[[2]] ~ my_table[[1]])
+    summ <- summary(lm_);
+    #summ$coefficients; is: Estimate, Std.Error of estimate (for conf.int),  t_statistic, p_level
+  });
+  
 })

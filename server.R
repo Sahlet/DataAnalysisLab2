@@ -252,9 +252,12 @@ shinyServer(function(input, output) {
     
     std_errors <- sapply (1:x_length, function(n){ sqrt(sigma_sqr/N + sigma_k_sqr*((x[n] - predicat_mean)^2)) });
     half_of_conf_interval <- t_quantile*std_errors;
+    half_of_predict_interval <- t_quantile*sqrt(std_errors^2 + sigma_sqr);
     
     lines(x, y + half_of_conf_interval, col = "red", lty = 2);
     lines(x, y - half_of_conf_interval, col = "red", lty = 2);
+    lines(x, y + half_of_predict_interval, col = "red", lty = 4);
+    lines(x, y - half_of_predict_interval, col = "red", lty = 4);
     
     #########################################################################
     #y = 1/(k*x + b)
@@ -269,9 +272,12 @@ shinyServer(function(input, output) {
     
     std_errors <- sapply (1:x_length, function(n){ sqrt(sigma_sqr/N + sigma_k_sqr*((x[n] - predicat_mean)^2)) });
     half_of_conf_interval <- t_quantile*std_errors;
+    half_of_predict_interval <- t_quantile*sqrt(std_errors^2 + sigma_sqr);
     
     lines(x, 1/(y + half_of_conf_interval), col = "blue", lty = 2);
     lines(x, 1/(y - half_of_conf_interval), col = "blue", lty = 2);
+    lines(x, 1/(y + half_of_predict_interval), col = "blue", lty = 4);
+    lines(x, 1/(y - half_of_predict_interval), col = "blue", lty = 4);
     
     return(pl_);
   });

@@ -144,27 +144,45 @@ shinyServer(function(input, output) {
     }
     return(result);
   });
+  
+  get_my_table_lm <- reactive({
+    my_table <- get_my_table();
+    if (is.null(my_table)) {
+      return(NULL);
+    }
+    
+    return(lm(my_table[[2]] ~ my_table[[1]]));
+  });
+  
+  get_my_table_nlm <- reactive({
+    my_table <- get_my_table();
+    if (is.null(my_table)) {
+      return(NULL);
+    }
+    
+    return(lm(1/my_table[[2]] ~ my_table[[1]]));
+  });
    
   #* **1.**	Побудову кореляційного поля
   output$correlation_field <- renderPlot({
     my_table <- get_my_table();
-    if (!is.null(my_table)) {
-      lm_ <- lm(my_table[[2]] ~ my_table[[1]]);
-      
-      pl_ <- plot(my_table);
-      grid();
-      abline(lm_, col = "red");
-      
-      #y = 1/(k*x + b)
-      lm_ <- lm(1/my_table[[2]] ~ my_table[[1]]);
-      x_min_max <- range(my_table[[1]]);
-      x <- seq(x_min_max[1], x_min_max[2], 0.1);
-      y <- 1/(lm_$coefficients[1] + lm_$coefficients[2]*x);
-      lines(x, y, col = "blue");
-      
-      return(pl_);
+    if (is.null(my_table)) {
+      return(NULL);
     }
-    return(NULL);
+    lm_ <- get_my_table_lm();
+    
+    pl_ <- plot(my_table);
+    grid();
+    abline(lm_, col = "red");
+    
+    #y = 1/(k*x + b)
+    lm_ <- get_my_table_nlm();
+    x_min_max <- range(my_table[[1]]);
+    x <- seq(x_min_max[1], x_min_max[2], 0.1);
+    y <- 1/(lm_$coefficients[1] + lm_$coefficients[2]*x);
+    lines(x, y, col = "blue");
+    
+    return(pl_);
   });
   
   output$sample_size <- renderPrint({
@@ -331,8 +349,25 @@ shinyServer(function(input, output) {
     ));
   });
   
+  output$lin_regression_description <- renderPrint({
+    my_table <- get_my_table();
+    if (is.null(my_table)){
+      return(NULL);
+    }
+    
+    return(cat(
+      paste0(
+        colnames(my_table)[2], " = coeff*", colnames(my_table)[1], " + offset"
+      )
+    ));
+  });
+  
   output$lin_regression <- renderTable({
-    lm_ <- lm(my_table[[2]] ~ my_table[[1]])
+    my_table <- get_my_table();
+    if (is.null(my_table)) {
+      return(NULL);
+    }
+    lm_ <- get_my_table_lm();
     summ <- summary(lm_);
     #summ$coefficients; is: Estimate, Std.Error of estimate (for conf.int),  t_statistic, p_level
     
@@ -344,7 +379,7 @@ shinyServer(function(input, output) {
     
     statistic <- summ$coefficient[,3];
     
-    quantile <- rep(qt(input$confidence_level, length(my_table[[1]]) - 1), times = 2);
+    quantile <- rep(qt(input$confidence_level, length(my_table[[1]]) - 2), times = 2);
     
     H0_estimate_equal_to_0 <- abs(statistic) <= quantile;
     
@@ -374,6 +409,102 @@ shinyServer(function(input, output) {
     colnames(result)[6] <- "H0: estimate is 0";
     
     return (result);
+  });
+  
+  output$lin_regression_R_sqr_and_Fstatistic <- renderPrint({
+    my_table <- get_my_table();
+    if (is.null(my_table)){
+      return(NULL);
+    }
+    
+    lm_ <- get_my_table_lm();
+    summ <- summary(lm_);
+    
+    return(cat(
+      paste0(
+        "Multiple R-squared: ", summ$r.squared, "\n",
+        "F-statistic: ", summ$fstatistic[1], " on ", summ$fstatistic[2], " and ", summ$fstatistic[3], " DF",  ", p_value: ", 1 - pf(summ$fstatistic[1], summ$fstatistic[2], summ$fstatistic[3])
+      )
+    ));
+  });
+  
+  output$nlin_regression_description <- renderPrint({
+    my_table <- get_my_table();
+    if (is.null(my_table)){
+      return(NULL);
+    }
+    
+    return(cat(
+      paste0(
+        "1/", colnames(my_table)[2], " = coeff*", colnames(my_table)[1], " + offset"
+      )
+    ));
+  });
+  
+  output$nlin_regression <- renderTable({
+    my_table <- get_my_table();
+    if (is.null(my_table)) {
+      return(NULL);
+    }
+    lm_ <- get_my_table_nlm();
+    summ <- summary(lm_);
+    #summ$coefficients; is: Estimate, Std.Error of estimate (for conf.int),  t_statistic, p_level
+    
+    row_names <- c("offset", "coeff");
+    
+    estimate <- summ$coefficient[,1];
+    
+    std_error <- summ$coefficient[,2];
+    
+    statistic <- summ$coefficient[,3];
+    
+    quantile <- rep(qt(input$confidence_level, length(my_table[[1]]) - 2), times = 2);
+    
+    H0_estimate_equal_to_0 <- abs(statistic) <= quantile;
+    
+    p_level <- summ$coefficient[,4];
+    
+    conf_int <- sapply(1:2, function(i) {
+      paste0("(", estimate[i] - std_error[i]*quantile[i], "; ", estimate[i] + std_error[i]*quantile[i], ")")
+    });
+    
+    estimate <- c(
+      as.character(estimate[1]),
+      as.character(estimate[2])
+    );
+    
+    result <- data.frame(
+      row_names,
+      estimate,
+      std_error,
+      statistic,
+      quantile,
+      H0_estimate_equal_to_0,
+      p_level,
+      conf_int
+    );
+    
+    colnames(result)[1] <- "";
+    colnames(result)[6] <- "H0: estimate is 0";
+    
+    return (result);
+  });
+  
+  output$nlin_regression_R_sqr_and_Fstatistic <- renderPrint({
+    my_table <- get_my_table();
+    if (is.null(my_table)){
+      return(NULL);
+    }
+    
+    lm_ <- get_my_table_nlm();
+    summ <- summary(lm_);
+    
+    return(cat(
+      paste0(
+        "Multiple R-squared: ", summ$r.squared, "\n",
+        "F-statistic: ", summ$fstatistic[1], " on ", summ$fstatistic[2], " and ", summ$fstatistic[3], " DF",  ", p_value: ", 1 - pf(summ$fstatistic[1], summ$fstatistic[2], summ$fstatistic[3])
+      )
+    ));
   });
   
 })

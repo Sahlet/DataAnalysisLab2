@@ -71,6 +71,8 @@ library(shiny)
           verbatimTextOutput("lin_regression_description"),
           tableOutput("lin_regression"),
           verbatimTextOutput("lin_regression_R_sqr_and_Fstatistic"),
+          br(),
+          br(),
           h3("NotLinear regression"),
           verbatimTextOutput("nlin_regression_description"),
           tableOutput("nlin_regression"),

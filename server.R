@@ -124,6 +124,48 @@ correlation_ratio_test <- function(my_table, points_from_range_, confidence_leve
   return (result);
 };
 
+lm_coeff_table <- function(summ, confidence_level){
+  #summ$coefficients; is: Estimate, Std.Error of estimate (for conf.int),  t_statistic, p_level
+  
+  row_names <- c("offset", "coeff");
+  
+  estimate <- summ$coefficient[,1];
+  
+  std_error <- summ$coefficient[,2];
+  
+  statistic <- summ$coefficient[,3];
+  
+  quantile <- rep(qt(confidence_level, summ$fstatistic[3]), times = 2);
+  
+  H0_estimate_equal_to_0 <- abs(statistic) <= quantile;
+  
+  p_level <- summ$coefficient[,4];
+  
+  conf_int <- sapply(1:2, function(i) {
+    paste0("(", estimate[i] - std_error[i]*quantile[i], "; ", estimate[i] + std_error[i]*quantile[i], ")")
+  });
+  
+  estimate <- c(
+    as.character(estimate[1]),
+    as.character(estimate[2])
+  );
+  
+  result <- data.frame(
+    row_names,
+    estimate,
+    std_error,
+    statistic,
+    quantile,
+    H0_estimate_equal_to_0,
+    p_level,
+    conf_int
+  );
+  
+  colnames(result)[1] <- "";
+  colnames(result)[6] <- "H0: estimate is 0";
+  
+  return (result);
+}
 
 shinyServer(function(input, output) {
   
@@ -153,6 +195,14 @@ shinyServer(function(input, output) {
     
     return(lm(my_table[[2]] ~ my_table[[1]]));
   });
+  get_my_table_lm_summ <- reactive({
+    my_table <- get_my_table();
+    if (is.null(my_table)) {
+      return(NULL);
+    }
+    
+    return(summary(get_my_table_lm()));
+  });
   
   get_my_table_nlm <- reactive({
     my_table <- get_my_table();
@@ -162,6 +212,14 @@ shinyServer(function(input, output) {
     
     return(lm(1/my_table[[2]] ~ my_table[[1]]));
   });
+  get_my_table_nlm_summ <- reactive({
+    my_table <- get_my_table();
+    if (is.null(my_table)) {
+      return(NULL);
+    }
+    
+    return(summary(get_my_table_nlm()));
+  });
    
   #* **1.**	Побудову кореляційного поля
   output$correlation_field <- renderPlot({
@@ -169,18 +227,51 @@ shinyServer(function(input, output) {
     if (is.null(my_table)) {
       return(NULL);
     }
+    
+    N <- length(my_table[[1]])
+    predicat_mean <- mean(my_table[[1]]);
+    x_min_max <- range(my_table[[1]]);
+    x <- seq(x_min_max[1] - (x_min_max[2] - x_min_max[1]) / 4, x_min_max[2] + (x_min_max[2] - x_min_max[1]) / 4, 0.1);
+    x_length <- length(x);
+    t_quantile <- qt((1 + input$confidence_level)/2, N - 2);
+    
+    #########################################################################
     lm_ <- get_my_table_lm();
+    summ <- get_my_table_lm_summ();
     
     pl_ <- plot(my_table);
     grid();
     abline(lm_, col = "red");
     
+    y_func <- function(x) { lm_$coefficients[1] + x*lm_$coefficients[2]; }
+    
+    y <- sapply(x, y_func);
+    
+    sigma_sqr <- summ$sigma^2;
+    sigma_k_sqr <- summ$coefficient[2,2]^2;
+    
+    std_errors <- sapply (1:x_length, function(n){ sqrt(sigma_sqr/N + sigma_k_sqr*((x[n] - predicat_mean)^2)) });
+    half_of_conf_interval <- t_quantile*std_errors;
+    
+    lines(x, y + half_of_conf_interval, col = "red", lty = 2);
+    lines(x, y - half_of_conf_interval, col = "red", lty = 2);
+    
+    #########################################################################
     #y = 1/(k*x + b)
     lm_ <- get_my_table_nlm();
-    x_min_max <- range(my_table[[1]]);
-    x <- seq(x_min_max[1], x_min_max[2], 0.1);
-    y <- 1/(lm_$coefficients[1] + lm_$coefficients[2]*x);
-    lines(x, y, col = "blue");
+    summ <- get_my_table_nlm_summ();
+    
+    y <- sapply(x, y_func);
+    lines(x, 1/y, col = "blue");
+    
+    sigma_sqr <- summ$sigma^2;
+    sigma_k_sqr <- summ$coefficient[2,2]^2;
+    
+    std_errors <- sapply (1:x_length, function(n){ sqrt(sigma_sqr/N + sigma_k_sqr*((x[n] - predicat_mean)^2)) });
+    half_of_conf_interval <- t_quantile*std_errors;
+    
+    lines(x, 1/(y + half_of_conf_interval), col = "blue", lty = 2);
+    lines(x, 1/(y - half_of_conf_interval), col = "blue", lty = 2);
     
     return(pl_);
   });
@@ -367,48 +458,7 @@ shinyServer(function(input, output) {
     if (is.null(my_table)) {
       return(NULL);
     }
-    lm_ <- get_my_table_lm();
-    summ <- summary(lm_);
-    #summ$coefficients; is: Estimate, Std.Error of estimate (for conf.int),  t_statistic, p_level
-    
-    row_names <- c("offset", "coeff");
-    
-    estimate <- summ$coefficient[,1];
-    
-    std_error <- summ$coefficient[,2];
-    
-    statistic <- summ$coefficient[,3];
-    
-    quantile <- rep(qt(input$confidence_level, length(my_table[[1]]) - 2), times = 2);
-    
-    H0_estimate_equal_to_0 <- abs(statistic) <= quantile;
-    
-    p_level <- summ$coefficient[,4];
-    
-    conf_int <- sapply(1:2, function(i) {
-      paste0("(", estimate[i] - std_error[i]*quantile[i], "; ", estimate[i] + std_error[i]*quantile[i], ")")
-    });
-    
-    estimate <- c(
-      as.character(estimate[1]),
-      as.character(estimate[2])
-    );
-    
-    result <- data.frame(
-      row_names,
-      estimate,
-      std_error,
-      statistic,
-      quantile,
-      H0_estimate_equal_to_0,
-      p_level,
-      conf_int
-    );
-    
-    colnames(result)[1] <- "";
-    colnames(result)[6] <- "H0: estimate is 0";
-    
-    return (result);
+    return (lm_coeff_table(get_my_table_lm_summ(), input$confidence_level));
   });
   
   output$lin_regression_R_sqr_and_Fstatistic <- renderPrint({
@@ -417,8 +467,7 @@ shinyServer(function(input, output) {
       return(NULL);
     }
     
-    lm_ <- get_my_table_lm();
-    summ <- summary(lm_);
+    summ <- get_my_table_lm_summ();
     
     return(cat(
       paste0(
@@ -446,48 +495,7 @@ shinyServer(function(input, output) {
     if (is.null(my_table)) {
       return(NULL);
     }
-    lm_ <- get_my_table_nlm();
-    summ <- summary(lm_);
-    #summ$coefficients; is: Estimate, Std.Error of estimate (for conf.int),  t_statistic, p_level
-    
-    row_names <- c("offset", "coeff");
-    
-    estimate <- summ$coefficient[,1];
-    
-    std_error <- summ$coefficient[,2];
-    
-    statistic <- summ$coefficient[,3];
-    
-    quantile <- rep(qt(input$confidence_level, length(my_table[[1]]) - 2), times = 2);
-    
-    H0_estimate_equal_to_0 <- abs(statistic) <= quantile;
-    
-    p_level <- summ$coefficient[,4];
-    
-    conf_int <- sapply(1:2, function(i) {
-      paste0("(", estimate[i] - std_error[i]*quantile[i], "; ", estimate[i] + std_error[i]*quantile[i], ")")
-    });
-    
-    estimate <- c(
-      as.character(estimate[1]),
-      as.character(estimate[2])
-    );
-    
-    result <- data.frame(
-      row_names,
-      estimate,
-      std_error,
-      statistic,
-      quantile,
-      H0_estimate_equal_to_0,
-      p_level,
-      conf_int
-    );
-    
-    colnames(result)[1] <- "";
-    colnames(result)[6] <- "H0: estimate is 0";
-    
-    return (result);
+    return (lm_coeff_table(get_my_table_nlm_summ(), input$confidence_level));
   });
   
   output$nlin_regression_R_sqr_and_Fstatistic <- renderPrint({
@@ -496,8 +504,7 @@ shinyServer(function(input, output) {
       return(NULL);
     }
     
-    lm_ <- get_my_table_nlm();
-    summ <- summary(lm_);
+    summ <- get_my_table_nlm_summ();
     
     return(cat(
       paste0(

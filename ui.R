@@ -63,7 +63,12 @@ library(shiny)
           ),
           br(),
           h3("Correlation test"),
-          tableOutput("correlation_test")
+          tableOutput("correlation_test"),
+          
+          br(),
+          br(),
+          h3("Linear regression"),
+          tableOutput("lin_regression")
         )
       )
     )

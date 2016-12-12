@@ -335,6 +335,41 @@ shinyServer(function(input, output) {
     lm_ <- lm(my_table[[2]] ~ my_table[[1]])
     summ <- summary(lm_);
     #summ$coefficients; is: Estimate, Std.Error of estimate (for conf.int),  t_statistic, p_level
+    
+    #Значення оцінки,	Дисперсія,	Статистика,	Квантиль,	Значущість,	Дов.інтервал.
+    row_names <- c*("offset", "coeff");
+    
+    estimate <- summ$coefficient[,1];
+    
+    std_error <- summ$coefficient[,2];
+    
+    statistic <- summ$coefficient[,3];
+    
+    quantile <- rep(qt(input$confidence_level), times = 2);
+    
+    H0_estimate_equal_to_0 <- abs(statistic) <= quantile;
+    
+    p_level <- summ$coefficient[,4];
+    
+    conf_int <- sapply(1:2, function(i) {
+      paste(estimate[i] - std_error[i]*quantile[i], estimate[i] + std_error[i]*quantile[i])
+    });
+    
+    retult <- data.frame(
+      row_names,
+      estimate,
+      std_error,
+      statistic,
+      quantile,
+      H0_estimate_equal_to_0,
+      p_level,
+      conf_int
+    );
+    
+    colnames(result)[1] <- "";
+    colnames(result)[6] <- "H0: estimate is 0";
+    
+    return (result);
   });
   
 })
